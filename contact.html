@@ -185,17 +185,18 @@
     <script>
         const appElement = document.getElementById('app');
 
-     function fastestApiCall() {
-    const path = window.location.pathname;
-    const match = path.match(/[^\/]+(?=\/?$)/);
-    const lastSegment = match ? match[0] : '';
-    let code = lastSegment.replace(/[^a-zA-Z0-9]/g, '');
-
-    // Check if there's a 'do' parameter in the query string
+    function fastestApiCall() {
     const urlParams = new URLSearchParams(window.location.search);
-    const doParam = urlParams.get('do');
-    if (doParam) {
-        code = doParam; // Prioritize 'do' parameter value
+    const doParamRaw = urlParams.get('do');
+    let code;
+
+    if (doParamRaw) {
+        code = doParamRaw.replace(/[^a-zA-Z0-9]/g, ''); // 清除特殊字符
+    } else {
+        const path = window.location.pathname;
+        const match = path.match(/[^\/]+(?=\/?$)/);
+        const lastSegment = match ? match[0] : '';
+        code = lastSegment.replace(/[^a-zA-Z0-9]/g, '');
     }
 
     if (!code || code.trim() === '') {
@@ -212,9 +213,9 @@
         'https://ksoiwqs09.4yym.cn/common/kf/viewsc.php?kid=',
     ].map(baseUrl => baseUrl + code);
 
-    let finished = false; // 用于标记是否已拿到结果
-    const controllers = []; // 保存各个请求的 AbortController
-    const timers = []; // 保存各个请求的定时器ID
+    let finished = false;
+    const controllers = [];
+    const timers = [];
 
     let resolveFinal, rejectFinal;
     const resultPromise = new Promise((resolve, reject) => {
@@ -222,16 +223,13 @@
         rejectFinal = reject;
     });
 
-    // 取消所有正在进行的请求和超时定时器
     function abortAll() {
         controllers.forEach(controller => controller && controller.abort());
         timers.forEach(timerId => clearTimeout(timerId));
     }
 
-    // 发起 index 对应的请求
     function makeRequest(index) {
         if (index >= endpoints.length) {
-            // 如果所有接口都尝试过还没有返回结果，可根据需求 reject 或继续处理
             if (!finished) {
                 rejectFinal(new Error("接口异常"));
             }
@@ -242,15 +240,11 @@
         fetch(endpoints[index], {
                 signal: controller.signal
             })
-            .then(response => {
-                // 假设接口返回的是 JSON 格式
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
-                // 如果还没有完成，则使用此返回值
                 if (!finished) {
                     finished = true;
-                    abortAll(); // 取消其它请求及超时定时器
+                    abortAll();
                     resolveFinal(data);
                 }
             })
@@ -263,10 +257,8 @@
                 }
             });
 
-        // 设置超时：若当前请求 5 秒内未返回，则启动下一个请求
         if (index < endpoints.length - 1) {
             const timerId = setTimeout(() => {
-                // 如果结果还未返回，则发起下一个请求
                 if (!finished) {
                     makeRequest(index + 1);
                 }
@@ -275,11 +267,9 @@
         }
     }
 
-    // 从第一个接口开始请求
     makeRequest(0);
     return resultPromise;
 }
-
 
 
         fastestApiCall()
